@@ -1,23 +1,32 @@
-RAG Chatbot (notebookLM like)
+RAG Chatbot (NotebookLM-like)
 
-user can send messages / files to the chatbot.
-chatbot will prompting LLM with all related context data from the vector DB (RAG)
+Users can send messages and files to the chatbot.
+The chatbot prompts the LLM with related context from the vector DB (RAG).
 
-Vector DB should store:
-- user uploaded files content
+Vector DB stores:
+- uploaded file chunks
 - user messages
-- llm answers
+- assistant answers
 
-server
-- GET chatbot ui app
-- POST files upload (files content chunking & embedding & inserting to Vector DB)
-- POST chat compleations
-- GET conversation history
+Backend APIs:
+- POST /api/upload (file parsing, chunking, embedding, upsert into Qdrant)
+- POST /api/chat (non-stream completion)
+- POST /api/chat/stream (streaming completion)
+- GET /api/history/{conversation_id}
+- GET /api/files/{conversation_id}
+- GET /api/health
 
-technologies:
-- vector DB (Qdrant)
-- ollama (Embedding model, LLM model)
-- backend (python)
-- frontend (react)
+OpenAI-compatible APIs (for Open WebUI integration):
+- GET /v1/models
+- POST /v1/chat/completions (supports stream true/false)
 
-docker compose for all services
+Technologies:
+- vector DB: Qdrant
+- model runtime: Ollama (embedding + LLM)
+- backend: Python (FastAPI)
+- frontend: React App
+- deployment: Docker Compose
+
+Infrastructure:
+- Docker Compose services: qdrant, ollama-init, backend
+- Ollama runtime: host machine (Windows), accessed from containers via host.docker.internal:11434
