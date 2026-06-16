@@ -1,0 +1,23 @@
+RAG Chatbot (notebookLM like)
+
+user can send messages / files to the chatbot.
+chatbot will prompting LLM with all related context data from the vector DB (RAG)
+
+Vector DB should store:
+- user uploaded files content
+- user messages
+- llm answers
+
+server
+- GET chatbot ui app
+- POST files upload (files content chunking & embedding & inserting to Vector DB)
+- POST chat compleations
+- GET conversation history
+
+technologies:
+- vector DB (Qdrant)
+- ollama (Embedding model, LLM model)
+- backend (python)
+- frontend (react)
+
+docker compose for all services

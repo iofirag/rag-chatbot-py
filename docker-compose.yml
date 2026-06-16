@@ -1,0 +1,55 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.13.2
+    container_name: rag-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  ollama:
+    image: ollama/ollama:0.9.5
+    container_name: rag-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  ollama-init:
+    image: ollama/ollama:0.9.5
+    container_name: rag-ollama-init
+    depends_on:
+      - ollama
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "sleep 5 &&
+      ollama pull ${EMBEDDING_MODEL:-nomic-embed-text} &&
+      ollama pull ${LLM_MODEL:-llama3.2:3b}"
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: rag-backend
+    restart: unless-stopped
+    depends_on:
+      - qdrant
+      - ollama
+      - ollama-init
+    ports:
+      - "8000:8000"
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: rag_memory
+      OLLAMA_URL: http://ollama:11434
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+      LLM_MODEL: ${LLM_MODEL:-llama3.2:3b}
+
+volumes:
+  qdrant_data:
+  ollama_data:
