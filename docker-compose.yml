@@ -49,6 +49,7 @@ services:
       OLLAMA_URL: http://ollama:11434
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
       LLM_MODEL: ${LLM_MODEL:-llama3.2:3b}
+      HYBRID_ALPHA: ${HYBRID_ALPHA:-0.7}
 
 volumes:
   qdrant_data:

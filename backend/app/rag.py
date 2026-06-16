@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from datetime import datetime, timezone
 from typing import Any, Generator
 from uuid import uuid4
@@ -131,20 +132,65 @@ class RAGService:
         limit: int = 8,
         file_filters: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        candidates = self.search_related(conversation_id, query, limit=max(limit * 3, 18))
+        candidates = self.search_related(conversation_id, query, limit=max(limit * 3, 24))
         selected_files = {item.strip() for item in (file_filters or []) if item and item.strip()}
-        if not selected_files:
-            return candidates[:limit]
-
         filtered: list[dict[str, Any]] = []
-        for item in candidates:
-            if item.get("kind") == "file":
-                if item.get("filename") in selected_files:
-                    filtered.append(item)
-            else:
-                filtered.append(item)
 
-        return filtered[:limit]
+        for item in candidates:
+            if selected_files and item.get("kind") == "file" and item.get("filename") not in selected_files:
+                continue
+            filtered.append(item)
+
+        return self._fuse_hybrid_scores(query, filtered, limit=limit)
+
+    def _tokenize_text(self, text: str) -> set[str]:
+        return {token for token in re.split(r"[^a-zA-Z0-9]+", text.lower()) if len(token) >= 2}
+
+    def _keyword_score(self, query: str, text: str) -> float:
+        query_tokens = self._tokenize_text(query)
+        if not query_tokens:
+            return 0.0
+
+        text_tokens = self._tokenize_text(text)
+        overlap = len(query_tokens.intersection(text_tokens))
+        overlap_score = overlap / len(query_tokens)
+
+        phrase_bonus = 0.2 if query.lower() in text.lower() else 0.0
+        return min(1.0, overlap_score + phrase_bonus)
+
+    def _fuse_hybrid_scores(self, query: str, candidates: list[dict[str, Any]], limit: int = 8) -> list[dict[str, Any]]:
+        if not candidates:
+            return []
+
+        alpha = float(os.getenv("HYBRID_ALPHA", "0.7"))
+        alpha = max(0.0, min(1.0, alpha))
+
+        vector_scores = [float(item.get("score", 0.0)) for item in candidates]
+        min_vec = min(vector_scores)
+        max_vec = max(vector_scores)
+        span = max(max_vec - min_vec, 1e-9)
+
+        ranked: list[dict[str, Any]] = []
+        for item in candidates:
+            text = item.get("text", "")
+            keyword_score = self._keyword_score(query, text)
+            vector_raw = float(item.get("score", 0.0))
+            vector_norm = (vector_raw - min_vec) / span
+            hybrid_score = alpha * vector_norm + (1.0 - alpha) * keyword_score
+
+            ranked.append(
+                {
+                    **item,
+                    "score": hybrid_score,
+                    "vector_score": vector_raw,
+                    "vector_score_norm": vector_norm,
+                    "keyword_score": keyword_score,
+                    "hybrid_alpha": alpha,
+                }
+            )
+
+        ranked.sort(key=lambda item: item.get("score", 0.0), reverse=True)
+        return ranked[:limit]
 
     def list_files(self, conversation_id: str, limit: int = 1000) -> list[str]:
         result, _ = self.client.scroll(
